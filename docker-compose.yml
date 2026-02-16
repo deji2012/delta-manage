@@ -1,0 +1,16 @@
+version: '3.8'
+services:
+  mysql_db:
+    image: mysql:8.0
+    container_name: delta_mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root        # 数据库root密码
+      MYSQL_DATABASE: delta_reporting  # 自动创建的数据库名
+    ports:
+      - "3306:3306"                    # 将容器的3306映射到本地3306
+    volumes:
+      - db_data:/var/lib/mysql         # 数据持久化，防止重启丢失
+
+volumes:
+  db_data:

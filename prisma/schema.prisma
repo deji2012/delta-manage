@@ -1,0 +1,107 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  // provider = "mysql" // 或者 "postgresql"，根据你的本地数据库决定
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --------------------------------------
+// 1. 用户表 (sys_users) [cite: 13, 14]
+// --------------------------------------
+model User {
+  id        BigInt   @id @default(autoincrement()) // [cite: 14]
+  username  String   @unique @db.VarChar(50)       // [cite: 14]
+  password  String   @db.VarChar(100)              // [cite: 14]
+  nickname  String   @db.VarChar(50)               // [cite: 14]
+  phone     String?   @db.VarChar(20)               // [cite: 14]
+  
+  // role 枚举: admin, auditor, companion [cite: 14]
+  role      String   @db.VarChar(20) 
+  
+  // status: 0:待审核, 1:正常, 2:禁用, 3:驳回 [cite: 14]
+  status    Int      @default(0)
+
+  createdAt DateTime @default(now()) @map("created_at") // [cite: 14]
+
+  // 关系定义
+  createdCustomers Customer[] @relation("CustomerCreator")
+  createdOrders    Order[]    @relation("OrderCreator") // 陪玩发起的单
+  auditedOrders    Order[]    @relation("OrderAuditor") // 审核员审核的单
+
+  @@map("sys_users")
+}
+
+// --------------------------------------
+// 2. 客户表 (biz_customers) [cite: 15, 16]
+// --------------------------------------
+model Customer {
+  id        BigInt   @id @default(autoincrement()) // [cite: 16]
+  name      String   @db.VarChar(50)               // [cite: 16]
+  remark    String?  @db.VarChar(255)              // [cite: 16]
+  creatorId BigInt   @map("creator_id")            // [cite: 16]
+
+  // 关系定义
+  creator   User     @relation("CustomerCreator", fields: [creatorId], references: [id])
+  orders    Order[]
+
+  @@map("biz_customers")
+}
+
+// --------------------------------------
+// 3. 品类表 (biz_categories) - 来自文档3.6新增 [cite: 94, 95]
+// --------------------------------------
+model Category {
+  id          BigInt   @id @default(autoincrement()) // [cite: 95]
+  name        String   @db.VarChar(50)               // [cite: 95]
+  unitPrice   Decimal  @map("unit_price") @db.Decimal(10, 2) // [cite: 95]
+  unitMeasure String?  @default("小时") @map("unit_measure") @db.VarChar(10) // [cite: 95]
+  isEnabled   Int      @default(1) @map("is_enabled") // 1:启用, 0:禁用 [cite: 95]
+  createdAt   DateTime @default(now()) @map("created_at") // [cite: 95]
+
+  // 关系
+  orders      Order[]
+
+  @@map("biz_categories")
+}
+
+// --------------------------------------
+// 4. 订单表 (biz_orders) [cite: 17, 18, 96, 97, 98]
+// --------------------------------------
+model Order {
+  id             BigInt   @id @default(autoincrement()) // [cite: 18]
+  orderNo        String   @unique @map("order_no") @db.VarChar(32) // [cite: 18]
+  
+  // 关联字段
+  creatorId      BigInt   @map("creator_id") // 陪玩ID [cite: 18]
+  auditorId      BigInt   @map("auditor_id") // 指定审核员ID [cite: 18]
+  customerId     BigInt   @map("customer_id") // 客户ID [cite: 18]
+  categoryId     BigInt   @map("category_id") // 关联Category表 [cite: 97]
+
+  // 快照字段 (防止后续改价影响历史订单)
+  categorySnapshotName String  @map("category_snapshot_name") @db.VarChar(50) // [cite: 97]
+  unitPriceSnapshot    Decimal @map("unit_price_snapshot") @db.Decimal(10, 2) // [cite: 97]
+  
+  // 核心业务数据
+  quantity       Decimal  @db.Decimal(4, 1) // 对应文档的 duration/quantity [cite: 98]
+  extraFee       Decimal? @default(0) @map("extra_fee") @db.Decimal(10, 2) // [cite: 18]
+  totalPrice     Decimal  @map("total_price") @db.Decimal(10, 2) // [cite: 18, 98]
+  
+  // 凭证与状态
+  proofImgs      String?  @map("proof_imgs") @db.Text // JSON字符串格式 ["url1", "url2"] [cite: 18]
+  status         String   @db.VarChar(20) // audit, rejected, withdrawn, completed [cite: 18]
+  rejectReason   String?  @map("reject_reason") @db.VarChar(255) // [cite: 19]
+  createdAt      DateTime @default(now()) @map("created_at") // [cite: 19]
+
+  // 关系连接
+  creator        User     @relation("OrderCreator", fields: [creatorId], references: [id])
+  auditor        User     @relation("OrderAuditor", fields: [auditorId], references: [id])
+  customer       Customer @relation(fields: [customerId], references: [id])
+  category       Category @relation(fields: [categoryId], references: [id])
+
+  @@map("biz_orders")
+}
