@@ -24,8 +24,10 @@ const LoginPage = () => {
         message.success('登录成功');
         // 保存用户信息到本地 (简单做法)
         localStorage.setItem('user', JSON.stringify(data.user));
-        router.push('/dashboard');   // 还没做
-        
+        // 种下一个 Cookie 给后端的 Middleware 看 (有效期 1 天)
+        document.cookie = "isLoggedIn=true; path=/; max-age=86400";
+        router.push('/dashboard');   
+
       } else {
         // 处理状态错误提示
         message.error(data.error || '登录失败');

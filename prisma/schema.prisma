@@ -32,6 +32,7 @@ model User {
   createdCustomers Customer[] @relation("CustomerCreator")
   createdOrders    Order[]    @relation("OrderCreator") // 陪玩发起的单
   auditedOrders    Order[]    @relation("OrderAuditor") // 审核员审核的单
+  teammateOrders Order[] @relation("OrderTeammates") // 作为队友参与的订单
 
   @@map("sys_users")
 }
@@ -102,6 +103,7 @@ model Order {
   auditor        User     @relation("OrderAuditor", fields: [auditorId], references: [id])
   customer       Customer @relation(fields: [customerId], references: [id])
   category       Category @relation(fields: [categoryId], references: [id])
+  teammates      User[]  @relation("OrderTeammates") // 订单包含的队友
 
   @@map("biz_orders")
 }

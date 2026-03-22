@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
+import { Decimal } from 'decimal.js';
 
 // --------------------------------------
 // POST: 创建订单 (核心快照逻辑)
@@ -13,12 +14,13 @@ const createOrderSchema = z.object({
   quantity: z.number().min(0.1),    // 数量/时长
   extraFee: z.number().default(0),  // 附加费
   proofImgs: z.array(z.string()).optional(), // 图片链接数组
+  teammateIds: z.array(z.number()).optional(), // 队友ID数组
 });
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    
+
     // 1. 校验参数
     const validation = createOrderSchema.safeParse(body);
     if (!validation.success) {
@@ -36,15 +38,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "该品类不存在或已下架" }, { status: 400 });
     }
 
-    // 3. [关键] 后端计算总价 (Source: 109)
+    // 3. [关键] 后端计算总价 (已替换为 Decimal) 🌟
     // 公式: (数量 * 单价快照) + 附加费
-    // Decimal 计算比较麻烦，这里简化转 number 计算，生产环境建议用 decimal.js
-    const unitPriceSnapshot = Number(category.unitPrice);
-    const totalPrice = (quantity * unitPriceSnapshot) + extraFee;
-
+    // 保险起见，将数据库里的价格先 toString() 再喂给 Decimal，防止底层类型不兼容
+    const unitPriceSnapshotDec = new Decimal(category.unitPrice.toString()); 
+    const quantityDec = new Decimal(quantity);
+    const extraFeeDec = new Decimal(extraFee);
+    const totalPriceDec = quantityDec.times(unitPriceSnapshotDec).plus(extraFeeDec);
+    // 转回普通数字用于落库
+    const unitPriceSnapshot = unitPriceSnapshotDec.toNumber();
+    const totalPrice = totalPriceDec.toNumber();
     // 4. 生成订单号 (例如: DO + 时间戳 + 随机数)
     const orderNo = `DO${Date.now()}${Math.floor(Math.random() * 1000)}`;
 
+    const { teammateIds } = body; // 接收前端传来的 teammateIds 数组
     // 5. 落库
     const newOrder = await prisma.order.create({
       data: {
@@ -53,16 +60,20 @@ export async function POST(request: Request) {
         customerId: BigInt(customerId),
         auditorId: BigInt(auditorId),
         categoryId: BigInt(categoryId),
-        
+
         // 快照字段
         categorySnapshotName: category.name,
         unitPriceSnapshot: unitPriceSnapshot,
-        
+
         // 业务数据
         quantity,
         extraFee,
         totalPrice,
         proofImgs: JSON.stringify(proofImgs || []), // 转 JSON 字符串存
+
+        teammates: teammateIds && teammateIds.length > 0 ? {
+          connect: teammateIds.map((id: number) => ({ id })) // 关联队友
+        } : undefined,
         
         status: 'audit', // 初始状态 (Source: 74)
       }

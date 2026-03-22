@@ -4,6 +4,8 @@ import { Card, Descriptions, Button, Image, Tag, Modal, Input, message, Spin, Al
 import { CheckOutlined, CloseOutlined, UndoOutlined, LeftOutlined } from '@ant-design/icons';
 // 1. 引入 useParams
 import { useRouter, useParams } from 'next/navigation';
+import Decimal from 'decimal.js';
+
 
 // 2. 这里不需要定义 PageProps 了，也不需要接收 props
 const OrderDetailPage = () => {
@@ -49,6 +51,23 @@ const OrderDetailPage = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // 渲染操作栏之前，先安全地计算当前订单的陪玩分成
+  const calculateCompanionIncome = () => {
+    if (!order || !order.totalPrice) return '0.00';
+    
+    const teammatesCount = order.teammates?.length || 0;
+    const totalPeople = 1 + teammatesCount; // 报单人自己 + 队友
+
+    // 公式：总价 * 0.8 / 总人数
+    // times(0.8) 乘法，dividedBy(总人数) 除法，toFixed(2) 保留两位小数
+    const income = new Decimal(order.totalPrice)
+      .times(0.8)
+      .dividedBy(totalPeople)
+      .toFixed(2); 
+
+    return income;
   };
 
   // 统一处理操作
@@ -130,6 +149,23 @@ const OrderDetailPage = () => {
         <Descriptions bordered column={2}>
           <Descriptions.Item label="客户">{order.customer.name}</Descriptions.Item>
           <Descriptions.Item label="报单人">{order.creator.nickname}</Descriptions.Item>
+          <Descriptions.Item label="陪玩收入">
+            <span style={{ color: '#52c41a', fontWeight: 'bold' }}>
+              ¥{calculateCompanionIncome()}
+            </span>
+            {order.teammates?.length > 0 && (
+              <span style={{ fontSize: 12, color: '#888', marginLeft: 8 }}>
+                (包含自己共 {1 + order.teammates.length} 人平分 80%)
+              </span>
+            )}
+          </Descriptions.Item>
+
+          {/* 展示队友名字（如果有） */}
+          {order.teammates?.length > 0 && (
+            <Descriptions.Item label="拼单队友">
+              {order.teammates.map((t: any) => <Tag color="cyan" key={t.id}>{t.nickname}</Tag>)}
+            </Descriptions.Item>
+          )}
 
           <Descriptions.Item label="品类快照">{order.categorySnapshotName}</Descriptions.Item>
           <Descriptions.Item label="当时的单价">¥{order.unitPriceSnapshot}</Descriptions.Item>

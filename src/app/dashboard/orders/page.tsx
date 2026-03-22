@@ -1,6 +1,6 @@
 'use client';
 import React, { useEffect, useState } from 'react';
-import { Table, Button, Card, Modal, Form, InputNumber, Select, message, Tag, Upload, Descriptions } from 'antd';
+import { Table, Button, Card, Modal, Form, InputNumber, Select, message, Tag, Upload, Descriptions, Input, List } from 'antd';
 import { PlusOutlined, UploadOutlined, CalculatorOutlined } from '@ant-design/icons';
 import Link from 'next/link';
 
@@ -23,7 +23,12 @@ const OrdersPage = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<any>(null);
-
+  const [submitting, setSubmitting] = useState(false);
+  const [hasTeammates, setHasTeammates] = useState(false);
+  const [teammateModalOpen, setTeammateModalOpen] = useState(false);
+  const [teammateSearchKeyword, setTeammateSearchKeyword] = useState('');
+  const [searchResult, setSearchResult] = useState<any[]>([]);
+  const [selectedTeammates, setSelectedTeammates] = useState<any[]>([]); // 存放选中的队友
   // 弹窗相关数据源
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [customers, setCustomers] = useState([]);
@@ -72,6 +77,13 @@ const OrdersPage = () => {
     }
   };
 
+  // 搜索队友函数
+  const handleSearchTeammates = async () => {
+    const res = await fetch(`/api/users/search?keyword=${teammateSearchKeyword}`);
+    const json = await res.json();
+    if (res.ok) setSearchResult(json.data);
+  };
+
   // 3. 打开弹窗时加载下拉选项
   const openCreateModal = async () => {
     setIsModalOpen(true);
@@ -93,12 +105,18 @@ const OrdersPage = () => {
   // 4. 提交报单
   const handleSubmit = async (values: any) => {
     if (!user) return;
+    setSubmitting(true);
     try {
+      // 提取队友的 ID
+      // 只有在选择了“有队友”的情况下，才去 map 取出选中的队友 id
+      const teammateIds = hasTeammates ? selectedTeammates.map((t: any) => t.id) : [];
       const payload = {
         ...values,
         creatorId: user.id,
         // 这里简化处理：我们没有做真实的文件上传，直接模拟一个空数组或假图片
-        proofImgs: ["https://fake-img-url.com/1.jpg"]
+        proofImgs: ["https://fake-img-url.com/1.jpg"],
+        // 将队友 ID 数组放进 payload 传给后端
+        teammateIds: teammateIds
       };
 
       const res = await fetch('/api/orders', {
@@ -112,12 +130,17 @@ const OrdersPage = () => {
         message.success('报单成功！');
         setIsModalOpen(false);
         form.resetFields();
+        // 报单成功后，清空刚才选中的队友状态
+        setHasTeammates(false); 
+        setSelectedTeammates([]);
         fetchOrders(user);
       } else {
         message.error(json.error || '报单失败');
       }
     } catch (e) {
       message.error('网络错误');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -182,7 +205,7 @@ const OrdersPage = () => {
         onCancel={() => setIsModalOpen(false)}
         onOk={() => form.submit()}
         width={700}
-        confirmLoading={loading}
+        confirmLoading={submitting}
       >
         <Form form={form} onFinish={handleSubmit} layout="vertical">
           <div style={{ display: 'flex', gap: 16 }}>
@@ -196,6 +219,31 @@ const OrdersPage = () => {
                 options={auditors.map((a: any) => ({ label: a.nickname || a.username, value: a.id }))}
               />
             </Form.Item>
+            <Form.Item label="是否有队友">
+              <Select
+                value={hasTeammates}
+                onChange={(val) => {
+                  setHasTeammates(val);
+                  if (!val) setSelectedTeammates([]); // 选否则清空队友
+                }}
+                options={[{ label: '否', value: false }, { label: '是', value: true }]}
+              />
+            </Form.Item>
+
+            {hasTeammates && (
+              <Form.Item label="队友名称">
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {selectedTeammates.map(t => (
+                    <Tag closable onClose={() => setSelectedTeammates(prev => prev.filter(p => p.id !== t.id))} key={t.id}>
+                      {t.nickname}
+                    </Tag>
+                  ))}
+                  <Button size="small" type="dashed" icon={<PlusOutlined />} onClick={() => setTeammateModalOpen(true)}>
+                    添加队友
+                  </Button>
+                </div>
+              </Form.Item>
+            )}
           </div>
 
           <Card size="small" title="计价信息" style={{ background: '#f9f9f9', marginBottom: 24 }}>
@@ -234,6 +282,47 @@ const OrdersPage = () => {
             <div style={{ color: '#999', fontSize: 12 }}>* 当前演示模式下，图片不会真实上传，系统将使用默认占位图。</div>
           </Form.Item>
         </Form>
+      </Modal>
+      {/* 在页面底部添加一个专门搜索队友的弹窗 */}
+      <Modal
+        title="搜索队友"
+        open={teammateModalOpen}
+        onCancel={() => setTeammateModalOpen(false)}
+        footer={null}
+      >
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+          <Input
+            placeholder="输入陪玩昵称搜索"
+            value={teammateSearchKeyword}
+            onChange={e => setTeammateSearchKeyword(e.target.value)}
+            onPressEnter={handleSearchTeammates}
+          />
+          <Button type="primary" onClick={handleSearchTeammates}>搜索</Button>
+        </div>
+
+        <List
+          dataSource={searchResult}
+          renderItem={(item: any) => (
+            <List.Item
+              actions={[
+                <Button
+                  size="small"
+                  type="primary"
+                  key={item.id}
+                  disabled={selectedTeammates.some(t => t.id === item.id)} // 防止重复添加
+                  onClick={() => {
+                    setSelectedTeammates([...selectedTeammates, item]);
+                    message.success('已添加');
+                  }}
+                >
+                  添加
+                </Button>
+              ]}
+            >
+              <List.Item.Meta title={item.nickname} description={`账号: ${item.username}`} />
+            </List.Item>
+          )}
+        />
       </Modal>
     </div>
   );

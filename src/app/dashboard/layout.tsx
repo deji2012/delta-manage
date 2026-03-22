@@ -1,10 +1,10 @@
 'use client';
 import React, { useEffect, useState } from 'react';
 import { Layout, Menu, Button, Avatar, Dropdown, message, Tag, Spin } from 'antd';
-import { 
-  UserOutlined, 
-  LogoutOutlined, 
-  TeamOutlined, 
+import {
+  UserOutlined,
+  LogoutOutlined,
+  TeamOutlined,
   SolutionOutlined,
   SafetyCertificateOutlined,
   ShoppingOutlined,
@@ -35,6 +35,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // 2. 退出登录逻辑
   const handleLogout = () => {
     localStorage.removeItem('user'); // 清除缓存
+    // 清除 Cookie (将其过期时间设置为过去即可)
+    document.cookie = "isLoggedIn=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
     message.success('已安全退出');
     router.replace('/login'); // 跳回登录页
   };
@@ -74,7 +76,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     // 陪玩独有菜单 [cite: 35]
     if (user.role === 'companion') {
-       // items.push({ key: '/dashboard/orders', label: '我的接单' }); // 以后做
+      // items.push({ key: '/dashboard/orders', label: '我的接单' }); // 以后做
     }
     // 所有人都能看“我的任务”
     items.push({
@@ -117,16 +119,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <Tag color={user.role === 'admin' ? 'red' : 'blue'}>
               {user.role === 'admin' ? '管理员' : (user.role === 'auditor' ? '审核员' : '陪玩')}
             </Tag>
-            
+
             {/* 用户头像下拉菜单 */}
-            <Dropdown 
+            <Dropdown
               menu={{
                 items: [
-                  { 
-                    key: 'logout', 
-                    icon: <LogoutOutlined />, 
-                    label: '退出登录', 
-                    onClick: handleLogout 
+                  {
+                    key: 'logout',
+                    icon: <LogoutOutlined />,
+                    label: '退出登录',
+                    onClick: handleLogout
                   }
                 ]
               }}

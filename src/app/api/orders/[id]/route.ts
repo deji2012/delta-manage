@@ -22,6 +22,7 @@ export async function GET(request: Request, { params }: RouteParams) {
         customer: { select: { name: true } },
         creator: { select: { nickname: true, username: true } },
         auditor: { select: { nickname: true } },
+        teammates: { select: { id: true, nickname: true } } 
       }
     });
 
