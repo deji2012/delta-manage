@@ -1,10 +1,20 @@
 'use client';
 import React, { useEffect, useState } from 'react';
-import { Table, Button, Card, Tag, message, Space, Modal } from 'antd';
+import { Table, Button, Card, Tag, message, Space, Popconfirm } from 'antd';
 import { CheckOutlined, CloseOutlined } from '@ant-design/icons';
 
+// 定义数据类型，提升代码健壮性和智能提示
+interface AuditUser {
+  id: string;
+  username: string;
+  nickname: string;
+  phone: string;
+  role: string;
+  createdAt: string;
+}
+
 const AuditPage = () => {
-  const [users, setUsers] = useState([]);
+  const [users, setUsers] = useState<AuditUser[]>([]);
   const [loading, setLoading] = useState(false);
 
   // 获取待审核列表
@@ -15,7 +25,7 @@ const AuditPage = () => {
       const res = await fetch('/api/admin/users?status=0');
       const json = await res.json();
       if (res.ok) {
-        setUsers(json.data);
+        setUsers(json.data || []); // 防御性赋值，防止 data 为 null 导致 Table 崩溃
       } else {
         message.error('获取列表失败');
       }
@@ -65,28 +75,41 @@ const AuditPage = () => {
         </Tag>
       )
     },
-    { title: '申请时间', dataIndex: 'createdAt', key: 'createdAt' },
+    { 
+      title: '申请时间', 
+      dataIndex: 'createdAt', 
+      key: 'createdAt',
+      render: (text: string) => new Date(text).toLocaleString() // 格式化为易读的本地时间
+    },
     {
       title: '操作',
       key: 'action',
-      render: (_: any, record: any) => (
+      render: (_: unknown, record: AuditUser) => (
         <Space>
-          <Button 
-            type="primary" 
-            size="small" 
-            icon={<CheckOutlined />} 
-            onClick={() => handleAudit(record.id, 'approve')}
+          {/* 增加二次确认，防止手滑误触导致错误审核 */}
+          <Popconfirm
+            title="确认通过"
+            description={`确定要通过 ${record.nickname} 的注册申请吗？`}
+            onConfirm={() => handleAudit(record.id, 'approve')}
+            okText="确定"
+            cancelText="取消"
           >
-            通过
-          </Button>
-          <Button 
-            danger 
-            size="small" 
-            icon={<CloseOutlined />}
-            onClick={() => handleAudit(record.id, 'reject')}
+            <Button type="primary" size="small" icon={<CheckOutlined />}>
+              通过
+            </Button>
+          </Popconfirm>
+          
+          <Popconfirm
+            title="确认驳回"
+            description="确定要驳回该申请吗？"
+            onConfirm={() => handleAudit(record.id, 'reject')}
+            okText="确定"
+            cancelText="取消"
           >
-            驳回
-          </Button>
+            <Button danger size="small" icon={<CloseOutlined />}>
+              驳回
+            </Button>
+          </Popconfirm>
         </Space>
       ),
     },
